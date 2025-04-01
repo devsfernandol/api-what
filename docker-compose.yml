@@ -5,7 +5,7 @@ services:
     build: .
     container_name: api-what
     expose:
-      - "3001"   # Exponemos el puerto 3001 internamente para que Nginx se conecte
+      - "3001"
     restart: always
 
   nginx:
@@ -17,6 +17,4 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "8080:80"
-      # Descomenta la siguiente línea si configuras SSL dentro del contenedor
-      # - "443:443"
     restart: always
