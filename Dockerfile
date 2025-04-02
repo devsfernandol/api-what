@@ -1,33 +1,29 @@
-# -----------------------------------
-# Etapa 1: Construcción (Build)
-# -----------------------------------
+# ------------------------------------------------
+# Etapa 1: Construcción (Build) - Compila TypeScript
+# ------------------------------------------------
     FROM node:18-alpine AS build
 
-    # 1. Instala pnpm de forma global
-    RUN npm install -g pnpm
-    
-    # 2. Crea un directorio de trabajo
     WORKDIR /app
     
-    # 3. Copia tu package.json y pnpm-lock.yaml
-    COPY package.json pnpm-lock.yaml ./
+    # Copia tu package.json y lock file si lo tienes (package-lock.json)
+    COPY package*.json ./
     
-    # 4. Instala dependencias
-    RUN pnpm install
+    # Instala dependencias
+    RUN npm install
     
-    # 5. Copia el resto del proyecto (incluyendo tsconfig.json, src/, etc.)
+    # Copia el resto de archivos (src, tsconfig.json, etc.)
     COPY . .
     
-    # 6. Compila TypeScript -> dist/
-    RUN pnpm run build
+    # Compila TypeScript -> dist/
+    RUN npm run build
     
     
-    # -----------------------------------
-    # Etapa 2: Ejecución (Runtime)
-    # -----------------------------------
+    # ------------------------------------------------
+    # Etapa 2: Ejecución (Runtime) - Arranca tu bot
+    # ------------------------------------------------
     FROM node:18-alpine
     
-    # Instala librerías necesarias para Chrome
+    # 1) Instala librerías mínimas para que Chrome funcione
     RUN apk add --no-cache \
         nss \
         freetype \
@@ -36,26 +32,36 @@
         ttf-freefont \
         libstdc++
     
-    # Directorio de trabajo
+    # 2) Crea un usuario sin privilegios (pptruser)
+    RUN addgroup -S pptruser && adduser -S pptruser -G pptruser
+    
+    # 3) Puppeteer usará esta carpeta para instalar y buscar Chrome
+    ENV HOME=/home/pptruser
+    ENV PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
+    
+    # Crea la carpeta de caché con permisos
+    RUN mkdir -p /home/pptruser/.cache/puppeteer && chown -R pptruser:pptruser /home/pptruser
+    
+    # Define el directorio de trabajo
     WORKDIR /app
     
-    # Copia dist, node_modules y package.json desde la etapa de build
+    # Copia la carpeta dist (compilada), node_modules, y package.json desde la etapa build
     COPY --from=build /app/dist ./dist
     COPY --from=build /app/node_modules ./node_modules
-    COPY --from=build /app/package.json ./
-    COPY --from=build /app/pnpm-lock.yaml ./
+    COPY --from=build /app/package*.json ./
     
-    # (Clave) Fuerza que Puppeteer instale la versión de Chrome que necesita
-    RUN npx puppeteer browsers install chrome
-    
-    # (Opcional) Crea un usuario sin privilegios
-    RUN addgroup -S pptruser && adduser -S pptruser -G pptruser
+    # Ajusta permisos de /app
     RUN chown -R pptruser:pptruser /app
+    
+    # 4) Cambiamos al usuario pptruser
     USER pptruser
     
-    # Expón el puerto 3001
+    # 5) Instala Chrome EXACTO que Puppeteer requiera (guardado en /home/pptruser/.cache)
+    RUN npx puppeteer browsers install chrome
+    
+    # 6) Expón el puerto 3001
     EXPOSE 3001
     
-    # Finalmente, arrancamos tu app (que ya está compilada en dist/app.js)
+    # 7) Lanza tu servidor: "node dist/app.js"
     CMD ["node", "dist/app.js"]
     
