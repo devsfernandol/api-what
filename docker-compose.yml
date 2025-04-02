@@ -4,13 +4,11 @@ services:
   api-what:
     build: .
     container_name: api-what
-    expose:
-      - "3001"
+    ports:
+      - "3001:3001"
     restart: always
 
   nginx:
-    # En vez de "nginx:alpine", usa una etiqueta Debian/Ubuntu
-    # Por ejemplo, la versión stable:
     image: nginx:stable
     container_name: nginx-proxy
     depends_on:
