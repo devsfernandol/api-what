@@ -1,67 +1,46 @@
-# ------------------------------------------------
-# Etapa 1: Construcción (Build) - Compila TypeScript
-# ------------------------------------------------
-    FROM node:18-alpine AS build
+FROM node:18-bullseye
 
-    WORKDIR /app
-    
-    # Copia tu package.json y lock file si lo tienes (package-lock.json)
-    COPY package*.json ./
-    
-    # Instala dependencias
-    RUN npm install
-    
-    # Copia el resto de archivos (src, tsconfig.json, etc.)
-    COPY . .
-    
-    # Compila TypeScript -> dist/
-    RUN npm run build
-    
-    
-    # ------------------------------------------------
-    # Etapa 2: Ejecución (Runtime) - Arranca tu bot
-    # ------------------------------------------------
-    FROM node:18-alpine
-    
-    # 1) Instala librerías mínimas para que Chrome funcione
-    RUN apk add --no-cache \
-        nss \
-        freetype \
-        harfbuzz \
-        ca-certificates \
-        ttf-freefont \
-        libstdc++
-    
-    # 2) Crea un usuario sin privilegios (pptruser)
-    RUN addgroup -S pptruser && adduser -S pptruser -G pptruser
-    
-    # 3) Puppeteer usará esta carpeta para instalar y buscar Chrome
-    ENV HOME=/home/pptruser
-    ENV PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
-    
-    # Crea la carpeta de caché con permisos
-    RUN mkdir -p /home/pptruser/.cache/puppeteer && chown -R pptruser:pptruser /home/pptruser
-    
-    # Define el directorio de trabajo
-    WORKDIR /app
-    
-    # Copia la carpeta dist (compilada), node_modules, y package.json desde la etapa build
-    COPY --from=build /app/dist ./dist
-    COPY --from=build /app/node_modules ./node_modules
-    COPY --from=build /app/package*.json ./
-    
-    # Ajusta permisos de /app
-    RUN chown -R pptruser:pptruser /app
-    
-    # 4) Cambiamos al usuario pptruser
-    USER pptruser
-    
-    # 5) Instala Chrome EXACTO que Puppeteer requiera (guardado en /home/pptruser/.cache)
-    RUN npx puppeteer browsers install chrome
-    
-    # 6) Expón el puerto 3001
-    EXPOSE 3001
-    
-    # 7) Lanza tu servidor: "node dist/app.js"
-    CMD ["node", "dist/app.js"]
-    
+# 1) Instala librerías que Chrome necesita
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    fonts-liberation \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libx11-xcb1 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    xdg-utils \
+    # Limpieza de apt para reducir espacio (opcional)
+    && rm -rf /var/lib/apt/lists/*
+
+# 2) Directorio de trabajo
+WORKDIR /app
+
+# 3) Copia tus package.json / lockfiles
+COPY package*.json ./
+# Si usas PNPM, copia pnpm-lock.yaml y primero instala pnpm:
+# RUN npm install -g pnpm
+
+# 4) Instala dependencias (con npm o pnpm)
+RUN npm install
+
+# 5) Copia todo tu código al contenedor (src/, tsconfig.json, etc.)
+COPY . .
+
+# 6) Compila TypeScript -> dist/
+RUN npm run build
+
+# 7) Instala la versión de Chrome que Puppeteer requiere
+RUN npx puppeteer browsers install chrome
+
+# 8) Expón el puerto en el que corre tu app
+EXPOSE 3001
+
+# 9) Arranca tu aplicación compilada
+# Ajusta según tu proyecto: "node dist/app.js" o "npm start" si tu script "start" lo llama
+CMD ["node", "dist/app.js"]
