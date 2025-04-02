@@ -1,15 +1,17 @@
-FROM node:18-bullseye
+# Base Ubuntu 22.04
+FROM ubuntu:22.04
 
-# ----------------------------------------------------------------
-# Solución para el error de "invalid signature":
-#  - Primero hacemos apt-get update ignorando errores (|| true)
-#  - Luego instalamos debian-archive-keyring, que actualiza llaves GPG
-#  - Después de eso, apt-get update normal no falla
-# ----------------------------------------------------------------
-RUN apt-get update || true
-RUN apt-get install -y debian-archive-keyring
+# Evitamos preguntas interactivas en apt
+ENV DEBIAN_FRONTEND=noninteractive
 
-# 1) Instala librerías necesarias para Chrome en Debian
+# 1) Instala Node.js 18
+#    - Primero instalamos algunas utilidades como curl
+RUN apt-get update && apt-get install -y curl \
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2) Instala librerías necesarias para Chrome/Puppeteer
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     fonts-liberation \
@@ -26,26 +28,26 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# 2) Configura el directorio de trabajo
+# 3) Directorio de trabajo
 WORKDIR /app
 
-# 3) Copia los archivos de dependencias (package.json, package-lock.json, etc.)
+# 4) Copia archivos de dependencias
 COPY package*.json ./
 
-# 4) Instala dependencias
+# 5) Instala dependencias
 RUN npm install
 
-# 5) Copia todo el código del proyecto (src/, tsconfig.json, etc.)
+# 6) Copia el resto de tu proyecto (src/, tsconfig.json, etc.)
 COPY . .
 
-# 6) Compila TypeScript -> dist/ (ajusta si tu script se llama distinto)
+# (Opcional) Si usas TypeScript, compila a dist/
 RUN npm run build
 
-# 7) Instala la versión de Chrome que Puppeteer necesita
+# 7) Instala Chrome que Puppeteer requiere
 RUN npx puppeteer browsers install chrome
 
-# 8) Expón el puerto (ajusta si tu app usa otro)
+# 8) Exponer el puerto (asumiendo tu app escucha en 3001)
 EXPOSE 3001
 
-# 9) Arranca la aplicación compilada
+# 9) Arranca tu aplicación compilada (ajusta si no se llama dist/app.js)
 CMD ["node", "dist/app.js"]
