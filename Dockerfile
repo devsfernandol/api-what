@@ -1,6 +1,15 @@
 FROM node:18-bullseye
 
-# 1) Instala librerías que Chrome necesita
+# ----------------------------------------------------------------
+# Solución para el error de "invalid signature":
+#  - Primero hacemos apt-get update ignorando errores (|| true)
+#  - Luego instalamos debian-archive-keyring, que actualiza llaves GPG
+#  - Después de eso, apt-get update normal no falla
+# ----------------------------------------------------------------
+RUN apt-get update || true
+RUN apt-get install -y debian-archive-keyring
+
+# 1) Instala librerías necesarias para Chrome en Debian
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     fonts-liberation \
@@ -15,32 +24,28 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libgbm1 \
     xdg-utils \
-    # Limpieza de apt para reducir espacio (opcional)
     && rm -rf /var/lib/apt/lists/*
 
-# 2) Directorio de trabajo
+# 2) Configura el directorio de trabajo
 WORKDIR /app
 
-# 3) Copia tus package.json / lockfiles
+# 3) Copia los archivos de dependencias (package.json, package-lock.json, etc.)
 COPY package*.json ./
-# Si usas PNPM, copia pnpm-lock.yaml y primero instala pnpm:
-# RUN npm install -g pnpm
 
-# 4) Instala dependencias (con npm o pnpm)
+# 4) Instala dependencias
 RUN npm install
 
-# 5) Copia todo tu código al contenedor (src/, tsconfig.json, etc.)
+# 5) Copia todo el código del proyecto (src/, tsconfig.json, etc.)
 COPY . .
 
-# 6) Compila TypeScript -> dist/
+# 6) Compila TypeScript -> dist/ (ajusta si tu script se llama distinto)
 RUN npm run build
 
-# 7) Instala la versión de Chrome que Puppeteer requiere
+# 7) Instala la versión de Chrome que Puppeteer necesita
 RUN npx puppeteer browsers install chrome
 
-# 8) Expón el puerto en el que corre tu app
+# 8) Expón el puerto (ajusta si tu app usa otro)
 EXPOSE 3001
 
-# 9) Arranca tu aplicación compilada
-# Ajusta según tu proyecto: "node dist/app.js" o "npm start" si tu script "start" lo llama
+# 9) Arranca la aplicación compilada
 CMD ["node", "dist/app.js"]
