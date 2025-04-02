@@ -9,7 +9,9 @@ services:
     restart: always
 
   nginx:
-    image: nginx:alpine
+    # En vez de "nginx:alpine", usa una etiqueta Debian/Ubuntu
+    # Por ejemplo, la versión stable:
+    image: nginx:stable
     container_name: nginx-proxy
     depends_on:
       - api-what
