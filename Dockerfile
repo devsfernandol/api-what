@@ -3,19 +3,23 @@
 # -----------------------------------
     FROM node:18-alpine AS build
 
+    # 1. Instala pnpm de forma global
+    RUN npm install -g pnpm
+    
+    # 2. Crea un directorio de trabajo
     WORKDIR /app
     
-    # Copia los archivos de dependencias
-    COPY package*.json ./
+    # 3. Copia tu package.json y pnpm-lock.yaml
+    COPY package.json pnpm-lock.yaml ./
     
-    # Instala dependencias (incluyendo devDependencies para compilar TS)
-    RUN npm install
+    # 4. Instala dependencias
+    RUN pnpm install
     
-    # Copia el resto del código
+    # 5. Copia el resto del proyecto (incluyendo tsconfig.json, src/, etc.)
     COPY . .
     
-    # Compila TypeScript -> dist/
-    RUN npm run build
+    # 6. Compila TypeScript -> dist/
+    RUN pnpm run build
     
     
     # -----------------------------------
@@ -23,32 +27,35 @@
     # -----------------------------------
     FROM node:18-alpine
     
-    # Instala librerías necesarias para que Chrome/Chromium funcione
+    # Instala librerías necesarias para Chrome
     RUN apk add --no-cache \
         nss \
         freetype \
         harfbuzz \
         ca-certificates \
         ttf-freefont \
-        libstdc++ \
-        # Opcional, si lo piden: 
-        # udev \
-        # gtk+3.0 \ 
-        # (etc. según necesidades de Chrome)
+        libstdc++
     
+    # Directorio de trabajo
     WORKDIR /app
     
-    # Copiamos el dist compilado, node_modules y package.json
+    # Copia dist, node_modules y package.json desde la etapa de build
     COPY --from=build /app/dist ./dist
     COPY --from=build /app/node_modules ./node_modules
-    COPY --from=build /app/package*.json ./
+    COPY --from=build /app/package.json ./
+    COPY --from=build /app/pnpm-lock.yaml ./
     
-    # (Paso CRÍTICO) Instala la versión de Chrome que Puppeteer pide
+    # (Clave) Fuerza que Puppeteer instale la versión de Chrome que necesita
     RUN npx puppeteer browsers install chrome
     
-    # Expón el puerto donde corre tu app
+    # (Opcional) Crea un usuario sin privilegios
+    RUN addgroup -S pptruser && adduser -S pptruser -G pptruser
+    RUN chown -R pptruser:pptruser /app
+    USER pptruser
+    
+    # Expón el puerto 3001
     EXPOSE 3001
     
-    # Arranca con "npm start" => que debe llamar a "node dist/app.js"
-    CMD ["npm", "start"]
+    # Finalmente, arrancamos tu app (que ya está compilada en dist/app.js)
+    CMD ["node", "dist/app.js"]
     
